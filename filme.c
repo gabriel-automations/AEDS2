@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h> // Para a função trunc
+#include <time.h>
 
 //declaraçãod do protótipo da função abaixo
 int get_next_codigo(const char *nome_arquivo, int tamanho_registro);
@@ -161,6 +162,51 @@ void ordena_filmes_por_codigo(FILE* arq) {
 }
 
 //----------------------------------------------------------
+
+void criarBaseFilme(FILE *out, int tam)
+{
+    int vet[tam];
+    TFilme *fm;
+
+    for (int i = 0; i < tam; i++)
+    {
+        vet[i] = i + 1;
+    }
+
+    //shuffle(vet, tam, (tam*60)/100);
+    embaralhar_vetor(vet, tam);
+
+    printf("\nGerando a base de dados...\n");
+
+    for (int i = 0; i < tam; i++)
+    {
+        fm = filme(vet[i],"Velozes e Furiosos", 2005, 1, 1);
+        salva_filme(fm, out);
+    }
+    free(fm);
+}
+
+void embaralhar_vetor(int* vet, int tam) {
+    int tmp;
+    // Semeia o gerador de números aleatórios para garantir sequências diferentes a cada execução
+    srand(time(NULL)); 
+    
+    // Calcula o número de trocas (60% do tamanho do vetor)
+    int trocas = (tam * 60) / 100;
+
+    for (int t = 0; t < trocas; t++) {
+        // Escolhe dois índices aleatórios no intervalo [0, tam-1]
+        int i = rand() % tam;
+        int j = rand() % tam;
+        
+        // Troca os valores nos índices i e j
+        tmp = vet[i];
+        vet[i] = vet[j];
+        vet[j]=tmp;
+    }
+}
+
+
 
 void cadastrar_filme() {
     char titulo[100];
