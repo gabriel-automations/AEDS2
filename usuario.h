@@ -29,4 +29,25 @@ void listar_usuarios();
 //Cadastra os usuarios
 void cadastrar_usuario();
 
+void criarBaseUsuario(FILE *out, int tam);
+
+void embaralhar_vetor_usuario(int* vet, int tam);
+
+void selection_sort_disco(FILE* arq, int (*comparador)(TUser*, TUser*));
+
+int compara_por_codigo(TUser* a, TUser* b);
+
+void ordena_usuarios_por_codigo(FILE* arq);
+
+TUser* busca_sequencial_usuario(FILE* arq, int codigo, long* pos);
+
+void buscar_usuario_sequencial();
+
+TUser* busca_binaria_usuario(FILE* arq, int codigo, long* pos); 
+
+void buscar_usuario_binaria();
+
+
+
+
 #endif // USUARIO_H

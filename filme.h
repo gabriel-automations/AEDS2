@@ -61,6 +61,6 @@ void listar_filmes();
 
 void criarBaseFilme(FILE* out, int tam);
 
-void embaralhar_vetor(int* vet, int tam);;
+void embaralhar_vetor_filme(int* vet, int tam);;
 
 #endif // FILMEH
