@@ -108,7 +108,7 @@ int main() {
             case 4: buscar_filme_binaria(); break;
             case 5: buscar_usuario_sequencial(); break;
             case 6: buscar_usuario_binaria(); break;
-            case 7: ordena_filmes_por_ano(arq_filmes); break;
+            case 7: ordenar_por_ano(); break;
             case 8: ordena_filmes_por_codigo(arq_filmes); break;
             case 9: ordena_usuarios_por_codigo(arq_usuarios); break;
             case 10: emprestar_filme(); break;
