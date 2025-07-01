@@ -1,11 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
+
 #include "filme.h"
 #include "usuario.h"
+#include "emprestimo.h"
+
 #include "filme.c"
 #include "usuario.c"
+#include "emprestimo.c"
 
-
+void consultar_emprestimo_filme();
+void contar_filmes_por_usuario();
 
 void exibe_menu() {
     printf("\n======= LOCADORA DE FILMES =======\n");
@@ -23,6 +28,8 @@ void exibe_menu() {
     printf("12. Listar Todos os Usuarios\n");
     printf("13. Listar Todos os Filmes\n");
     printf("14. Gerar Nova Base de Dados de Filmes e Usuarios\n");
+    printf("15. Consultar emprestimo por filme\n");
+    printf("16. Contar filmes por usuario\n");
     printf("0. Sair\n");
     printf("====================================================\n");
     printf("Escolha uma opcao: ");
@@ -55,10 +62,37 @@ void geradorBases(){
     }
 }
 
+/*
+ * Função para registrar uma mensagem em um arquivo de log.
+ * Ela adiciona a data e a hora atuais a cada mensagem.
+ */
+void registra_log(const char* mensagem) {
+    // Abre o arquivo "locadora.log" em modo "a" (append - adicionar ao final)
+    FILE* log_file = fopen("locadora.log", "a");
+    if (log_file == NULL) {
+        // Se não for possível abrir o arquivo de log, simplesmente retorna.
+        // Não queremos que o programa principal pare por causa de um log.
+        return;
+    }
+
+    // Pega a data e hora atuais do sistema
+    time_t agora = time(NULL);
+    // Converte para um formato de texto legível
+    char* data_formatada = ctime(&agora);
+    // Remove a quebra de linha '\n' que ctime adiciona no final
+    data_formatada[strcspn(data_formatada, "\n")] = 0;
+
+    // Escreve a data/hora e a mensagem no arquivo
+    fprintf(log_file, "[%s] %s\n", data_formatada, mensagem);
+    
+    // Fecha o arquivo
+    fclose(log_file);
+}
+
 int main() {
     int opcao;
 
-    // Garante que o arquivo de filmes esteja ordenado por código para a busca binária
+    
     FILE* arq_filmes = fopen("filmes.dat", "r+b");
     FILE* arq_usuarios = fopen("usuarios.dat", "r+b");
 
@@ -82,6 +116,8 @@ int main() {
             case 12: listar_usuarios(); break;
             case 13: listar_filmes(); break;
             case 14: geradorBases(); break;
+            case 15: consultar_emprestimo_filme(); break;
+            case 16: contar_filmes_por_usuario(); break;
             case 0: printf("Saindo...\n"); break;
             default: printf("Opcao invalida!\n"); break;
         }
@@ -105,4 +141,93 @@ int get_next_codigo(const char* filename, int record_size) {
     fread(&codigo, sizeof(int), 1, file);
     fclose(file);
     return codigo + 1;
+}
+
+void consultar_emprestimo_filme() {
+    int cod_filme;
+    printf("Digite o codigo do filme para consultar: ");
+    scanf("%d", &cod_filme);
+
+    FILE* arq_emp = fopen("emprestimos.dat", "rb");
+    if (!arq_emp) {
+        printf("INFO: Nenhum emprestimo registrado.\n");
+        return;
+    }
+
+    TEmprestimo* emp;
+    int encontrado = 0;
+    while ((emp = le_emprestimo(arq_emp)) != NULL) {
+        if (emp->codigo_filme == cod_filme) {
+            // Encontramos o empréstimo do filme, agora precisamos buscar o nome do usuário.
+            FILE* arq_usuarios = fopen("usuarios.dat", "rb");
+            if (arq_usuarios) {
+                long pos;
+                TUser* usuario = busca_sequencial_usuario(arq_usuarios, emp->codigo_usuario, &pos);
+                if (usuario) {
+                    printf("INFO: O filme de codigo %d esta emprestado para o usuario: %s (Cod: %d).\n",
+                           cod_filme, usuario->nome, usuario->codigo);
+                    free(usuario);
+                } else {
+                    printf("INFO: O filme de codigo %d esta emprestado para o usuario de codigo %d (nome nao encontrado).\n",
+                           cod_filme, emp->codigo_usuario);
+                }
+                fclose(arq_usuarios);
+            }
+            encontrado = 1;
+            break; // Para o loop, pois cada filme só pode ser emprestado uma vez.
+        }
+        free(emp);
+    }
+
+    if (!encontrado) {
+        printf("INFO: O filme de codigo %d nao consta como emprestado.\n", cod_filme);
+    }
+
+    fclose(arq_emp);
+}
+
+void contar_filmes_por_usuario() {
+    int cod_usuario;
+    printf("Digite o codigo do usuario para consultar: ");
+    scanf("%d", &cod_usuario);
+
+    // Primeiro, vamos verificar se o usuário realmente existe para dar um feedback melhor.
+    FILE* arq_usuarios = fopen("usuarios.dat", "rb");
+    if (!arq_usuarios) {
+        printf("ERRO: Base de dados de usuarios vazia.\n");
+        return;
+    }
+    long pos;
+    TUser* usuario = busca_sequencial_usuario(arq_usuarios, cod_usuario, &pos);
+    fclose(arq_usuarios);
+    if (!usuario) {
+        printf("ERRO: Usuario com codigo %d nao encontrado.\n", cod_usuario);
+        return;
+    }
+    // O nome do usuário será útil para a mensagem final.
+    char nome_usuario[100];
+    strcpy(nome_usuario, usuario->nome);
+    free(usuario);
+
+
+    // Agora, vamos contar os empréstimos para esse usuário.
+    FILE* arq_emp = fopen("emprestimos.dat", "rb");
+    if (!arq_emp) {
+        printf("INFO: Nenhum emprestimo registrado no sistema.\n");
+        return;
+    }
+
+    TEmprestimo* emp;
+    int contador = 0;
+    while ((emp = le_emprestimo(arq_emp)) != NULL) {
+        if (emp->codigo_usuario == cod_usuario) {
+            contador++;
+        }
+        free(emp);
+    }
+
+    printf("INFO: O usuario %s (Cod: %d) possui %d filme(s) emprestado(s).\n",
+           nome_usuario, cod_usuario, contador);
+
+    fclose(arq_emp);
 }

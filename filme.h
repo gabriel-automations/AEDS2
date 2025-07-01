@@ -3,12 +3,12 @@
 
 #include <stdio.h>
 
+// Em filme.h
 typedef struct Filme{
     int codigo;
     char titulo[100];
     int ano;
-    int disponivel;
-    int codigo_usuario_emprestado;
+
 } TFilme;
 
 // Retorna tamanho do registro TFilme em bytes
@@ -31,12 +31,12 @@ int tamanho_arquivo_filmes(FILE* arq);
 
 // Busca um filme pelo código usando busca sequencial. Retorna o filme se encontrado, ou NULL.
 // A posição em bytes do registro é armazenada no ponteiro 'pos'.
-TFilme* busca_sequencial_filme(FILE* arq, int codigo, long* pos);
+TFilme* busca_sequencial_filme(FILE* arq, int codigo, long* pos, int* contador_comparacoes);
 
 // Busca um filme pelo código usando busca binária. Retorna o filme se encontrado, ou NULL.
 // A posição em bytes do registro é armazenada no ponteiro 'pos'.
 // IMPORTANTE: O arquivo DEVE estar ordenado por código.
-TFilme* busca_binaria_filme(FILE* arq, int codigo, long* pos);
+TFilme* busca_binaria_filme(FILE* arq, int codigo, long* pos, int* contador_comparacoes);
 
 // Ordena o arquivo de filmes em disco usando o campo 'ano' como chave.
 // O método utilizado é o Selection Sort.

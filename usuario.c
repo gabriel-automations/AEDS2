@@ -85,8 +85,7 @@ void criarBaseUsuario(FILE *out, int tam)
     {
         vet[i] = i + 1;
     }
-
-    //shuffle(vet, tam, (tam*60)/100);
+    
     embaralhar_vetor_usuario(vet, tam);
 
     printf("\nGerando a base de dados...\n");

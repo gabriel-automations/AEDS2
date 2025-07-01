@@ -1,4 +1,6 @@
 #include "filme.h"
+#include "emprestimo.h"
+#include "usuario.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -13,23 +15,20 @@ int get_next_codigo(const char *nome_arquivo, int tamanho_registro);
 // Decidimos que precisava ser um valor fixo para podermos usar o fseek e pular de um registro para o outro.
 int tamanho_registro_filme() {
     return sizeof(int)      // codigo
-           + sizeof(char) * 100 // titulo
-           + sizeof(int)      // ano
-           + sizeof(int)      // disponivel
-           + sizeof(int);     // codigo_usuario_emprestado
+       + sizeof(char) * 100 // titulo
+       + sizeof(int);     // ano
 }
 
 // Uma função de ajuda para criar um filme novo, pra gente não ter que repetir esse código.
 // Ela aloca a memória e já preenche com os dados que passamos.
-TFilme* filme(int cod, char* titulo, int ano, int disponivel, int cod_usuario) {
+TFilme* filme(int cod, char* titulo, int ano) {
     TFilme* filme = (TFilme*) malloc(sizeof(TFilme));
     // O memset limpa qualquer "lixo" de memória. Achamos uma boa prática.
     if (filme) memset(filme, 0, sizeof(TFilme));
     filme->codigo = cod;
     strcpy(filme->titulo, titulo);
     filme->ano = ano;
-    filme->disponivel = disponivel;
-    filme->codigo_usuario_emprestado = cod_usuario;
+
     return filme;
 }
 
@@ -40,8 +39,7 @@ void salva_filme(TFilme* filme, FILE* out) {
     // Tivemos que garantir que o título sempre ocupe 100 caracteres para manter o tamanho fixo do registro.
     fwrite(filme->titulo, sizeof(char), sizeof(filme->titulo), out);
     fwrite(&filme->ano, sizeof(int), 1, out);
-    fwrite(&filme->disponivel, sizeof(int), 1, out);
-    fwrite(&filme->codigo_usuario_emprestado, sizeof(int), 1, out);
+
 }
 
 // Lê um filme do arquivo, fazendo o processo inverso da função de salvar.
@@ -56,16 +54,15 @@ TFilme* le_filme(FILE* in) {
     // Se conseguiu ler o código, lê o resto dos campos.
     fread(filme->titulo, sizeof(char), sizeof(filme->titulo), in);
     fread(&filme->ano, sizeof(int), 1, in);
-    fread(&filme->disponivel, sizeof(int), 1, in);
-    fread(&filme->codigo_usuario_emprestado, sizeof(int), 1, in);
+
     return filme;
 }
 
 // Função simples para imprimir os dados de um filme de forma organizada na tela.
 void imprime_filme(TFilme* filme) {
     // Usamos o operador ternário `? :` como um if/else mais compacto.
-    printf("Cod: %d, Titulo: %s, Ano: %d, Disponivel: %s\n",
-           filme->codigo, filme->titulo, filme->ano, filme->disponivel ? "Sim" : "Nao");
+   printf("Cod: %d, Titulo: %s, Ano: %d\n",
+       filme->codigo, filme->titulo, filme->ano);
 }
 
 
@@ -79,22 +76,21 @@ int tamanho_arquivo_filmes(FILE* arq) {
 
 // Busca um filme lendo o arquivo do início ao fim.
 // É o método mais simples, mas pode ser lento em arquivos grandes.
-TFilme* busca_sequencial_filme(FILE* arq, int codigo, long* pos) {
-    rewind(arq); // Garante que a busca comece do início.
+TFilme* busca_sequencial_filme(FILE* arq, int codigo, long* pos, int* contador_comparacoes) {
+    rewind(arq); 
     TFilme* filme;
-    
-    // Lê filme por filme até o arquivo acabar.
+
     while ((filme = le_filme(arq)) != NULL) {
+        (*contador_comparacoes)++; // Incrementa a cada filme lido e comparado
         if (filme->codigo == codigo) {
-            // Achamos! Um detalhe aqui: ftell() dá a posição DEPOIS da leitura,
-            // então a gente volta o tamanho do registro para pegar o início certinho.
+
             *pos = ftell(arq) - tamanho_registro_filme();
             return filme;
         }
-        // Lembrete para nós: se não é o filme que queremos, precisamos liberar a memória dele.
+
         free(filme);
     }
-    *pos = -1; // Sinaliza que não encontrou.
+    *pos = -1; 
     return NULL;
 }
 
@@ -103,28 +99,31 @@ TFilme* busca_sequencial_filme(FILE* arq, int codigo, long* pos) {
  * ATENÇÃO: ESSA BUSCA SÓ FUNCIONA SE O ARQUIVO ESTIVER ORDENADO POR CÓDIGO!!!
  * É muito mais rápida porque vai "pulando" pelo arquivo.
  */
-TFilme* busca_binaria_filme(FILE* arq, int codigo, long* pos) {
+TFilme* busca_binaria_filme(FILE* arq, int codigo, long* pos, int* contador_comparacoes) {
     int num_registros = tamanho_arquivo_filmes(arq);
     int inicio = 0, fim = num_registros - 1;
     TFilme* filme = NULL;
 
     while (inicio <= fim) {
+        (*contador_comparacoes)++; // Incrementa para cada iteração do loop
         int meio = inicio + (fim - inicio) / 2;
         *pos = meio * tamanho_registro_filme();
-        fseek(arq, *pos, SEEK_SET); // O "pulo" da busca binária acontece aqui.
+        fseek(arq, *pos, SEEK_SET);
 
         filme = le_filme(arq);
-        if (!filme) break; // Segurança
+        if (!filme) break;
 
+        (*contador_comparacoes)++; // Incrementa para a comparação de igualdade
         if (filme->codigo == codigo) {
-            return filme; // Encontrado!
+            return filme;
         }
+        (*contador_comparacoes)++; // Incrementa para a comparação de menor/maior
         if (filme->codigo < codigo) {
-            inicio = meio + 1; // Se o código do meio for menor, procuramos na metade da direita.
+            inicio = meio + 1;
         } else {
-            fim = meio - 1; // Se for maior, procuramos na metade da esquerda.
+            fim = meio - 1;
         }
-        free(filme); // Liberamos o filme do "meio" se não for o que buscamos.
+        free(filme);
     }
     *pos = -1;
     return NULL;
@@ -133,7 +132,7 @@ TFilme* busca_binaria_filme(FILE* arq, int codigo, long* pos) {
 // Função que fizemos para ordenar o arquivo usando Selection Sort, direto no disco.
 // É mais lenta que um sort em memória porque mexe muito com o arquivo (muitos acessos).
 // Deixamos ela genérica, recebendo uma função `comparador` pra decidir como ordenar.
-void selection_sort_disco_filme(FILE* arq, int (*comparador)(TFilme*, TFilme*)) {
+void selection_sort_disco_filme(FILE* arq, int (*comparador)(TFilme*, TFilme*), int* contador_comparacoes) {
     int num_registros = tamanho_arquivo_filmes(arq);
     rewind(arq);
 
@@ -147,6 +146,7 @@ void selection_sort_disco_filme(FILE* arq, int (*comparador)(TFilme*, TFilme*)) 
             long pos_atual = j * tamanho_registro_filme();
             fseek(arq, pos_atual, SEEK_SET);
             TFilme* f_atual = le_filme(arq);
+            (*contador_comparacoes)++;
 
             // A função `comparador` que decide se o `f_atual` é menor que o `f_min`.
             if (comparador(f_atual, f_min) < 0) {
@@ -189,13 +189,77 @@ int compara_por_codigo_f(TFilme* a, TFilme* b) {
 
 
 // Funções mais simples que só chamam o sort principal com o comparador certo.
-void ordena_filmes_por_ano(FILE* arq) {
-    selection_sort_disco_filme(arq, compara_por_ano);
+void ordenar_por_ano() {
+    FILE* arq = fopen("filmes.dat", "r+b"); 
+    if (!arq) { 
+        printf("Base de dados de filmes vazia.\n"); 
+        return; 
+    }
+
+    printf("Ordenando filmes por ano. Isso pode levar um tempo...\n");
+
+    // Variáveis para medição
+    int comparacoes = 0;
+    clock_t inicio, fim;
+    double tempo_decorrido;
+    char log_mensagem[200];
+
+    // Inicia a medição de tempo
+    inicio = clock();
+
+    // Chama a função de ordenação, passando o comparador de ano
+    selection_sort_disco_filme(arq, compara_por_ano, &comparacoes);
+
+    // Termina a medição de tempo
+    fim = clock();
+    tempo_decorrido = ((double)(fim - inicio)) / CLOCKS_PER_SEC;
+
+    printf("Ordenacao por ano concluida.\n");
+
+    // Prepara e registra a mensagem de log
+    sprintf(log_mensagem, "Ordenacao por ANO (Selection Sort em Disco): Concluida. Tempo: %.6f segundos. Comparacoes: %d.",
+            tempo_decorrido, comparacoes);
+    registra_log(log_mensagem);
+    
+    // Lista os filmes na nova ordem, como a função original fazia
+    listar_filmes(); 
+
+    /*
+     * Reordena por código para manter a busca binária funcionando,
+     * exatamente como no seu código original.
+     */
+    printf("\nReordenando por codigo para manter a busca binaria funcionando...\n");
+    // Não vamos medir esta segunda ordenação para não poluir o log,
+    // mas poderíamos se quiséssemos.
+    ordena_filmes_por_codigo(arq); 
+    fclose(arq);
 }
 
 void ordena_filmes_por_codigo(FILE* arq) {
-    printf("Ordenacao feita!!");
-    selection_sort_disco_filme(arq, compara_por_codigo_f);
+    printf("Ordenando filmes por codigo. Isso pode levar um tempo...\n");
+
+    // Variáveis para medição
+    int comparacoes = 0;
+    clock_t inicio, fim;
+    double tempo_decorrido;
+    char log_mensagem[200];
+
+    // Inicia a medição de tempo
+    inicio = clock();
+
+    // Chama a nova versão da função de ordenação
+    selection_sort_disco_filme(arq, compara_por_codigo_f, &comparacoes);
+
+    // Termina a medição de tempo
+    fim = clock();
+    tempo_decorrido = ((double)(fim - inicio)) / CLOCKS_PER_SEC;
+
+    printf("Ordenacao concluida!\n");
+
+    // Prepara e registra a mensagem de log
+    sprintf(log_mensagem, "Ordenacao por CODIGO (Selection Sort em Disco): Concluida. Tempo: %.6f segundos. Comparacoes: %d.",
+            tempo_decorrido, comparacoes);
+    registra_log(log_mensagem);
 }
 
 //----------------------------------------------------------
@@ -215,7 +279,7 @@ void criarBaseFilme(FILE *out, int tam) {
     printf("\nGerando a base de dados...\n");
 
     for (int i = 0; i < tam; i++) {
-        fm = filme(vet[i], "Velozes e Furiosos", 2005, 1, 1);
+        fm = filme(vet[i], "Velozes e Furiosos", 2005);
         salva_filme(fm, out);
         free(fm); // Liberamos a memória do filme logo após salvar no arquivo.
     }
@@ -251,7 +315,7 @@ void cadastrar_filme() {
     scanf("%d", &ano);
 
     int cod = get_next_codigo("filmes.dat", tamanho_registro_filme());
-    TFilme* f = filme(cod, titulo, ano, 1, -1);
+    TFilme* f = filme(cod, titulo, ano);
 
     FILE* out = fopen("filmes.dat", "ab"); // "ab" = append binary, para adicionar no fim.
     salva_filme(f, out);
@@ -269,20 +333,44 @@ void buscar_filme_sequencial() {
 
     FILE* arq = fopen("filmes.dat", "rb");
     if (!arq) { printf("Base de dados de filmes vazia.\n"); return; }
-    
+
+    // Variáveis para medição de desempenho
     long pos;
-    TFilme* filme = busca_sequencial_filme(arq, codigo, &pos);
-    
+    int comparacoes = 0;
+    clock_t inicio, fim;
+    double tempo_decorrido;
+    char log_mensagem[200];
+
+    // Inicia a contagem do tempo
+    inicio = clock();
+
+    // Chama a nova versão da função, passando o endereço do contador
+    TFilme* filme = busca_sequencial_filme(arq, codigo, &pos, &comparacoes);
+
+    // Termina a contagem do tempo
+    fim = clock();
+    tempo_decorrido = ((double)(fim - inicio)) / CLOCKS_PER_SEC;
+
+    // Prepara a mensagem de log
     if (filme) {
         printf("Filme encontrado:\n");
         imprime_filme(filme);
+        sprintf(log_mensagem, "Busca sequencial pelo filme de codigo %d: SUCESSO. Tempo: %.6f segundos. Comparacoes: %d.",
+                codigo, tempo_decorrido, comparacoes);
         free(filme);
     } else {
         printf("Filme com codigo %d nao encontrado.\n", codigo);
+        sprintf(log_mensagem, "Busca sequencial pelo filme de codigo %d: FALHA. Tempo: %.6f segundos. Comparacoes: %d.",
+                codigo, tempo_decorrido, comparacoes);
     }
+
+    // Registra o log e fecha o arquivo
+    registra_log(log_mensagem);
     fclose(arq);
 
 }
+
+// Em filme.c
 
 void buscar_filme_binaria() {
     int codigo;
@@ -290,116 +378,182 @@ void buscar_filme_binaria() {
     scanf("%d", &codigo);
 
     FILE* arq = fopen("filmes.dat", "rb");
-    if (!arq) { printf("Base de dados de filmes vazia.\n"); return; }
+    if (!arq) { 
+        printf("Base de dados de filmes vazia.\n"); 
+        // Aqui, seria bom registrar um log de aviso também, se quiser
+        // registra_log("Tentativa de busca binaria com base de dados vazia.");
+        return; 
+    }
 
+    // Variáveis para medição de desempenho
     long pos;
-    TFilme* filme = busca_binaria_filme(arq, codigo, &pos);
-    
+    int comparacoes = 0;
+    clock_t inicio, fim;
+    double tempo_decorrido;
+    char log_mensagem[200];
+
+    // Inicia a contagem do tempo
+    inicio = clock();
+
+    // Chama a nova versão da função, passando o endereço do contador
+    TFilme* filme = busca_binaria_filme(arq, codigo, &pos, &comparacoes);
+
+    // Termina a contagem do tempo
+    fim = clock();
+    tempo_decorrido = ((double)(fim - inicio)) / CLOCKS_PER_SEC;
+
+    // Prepara a mensagem de log
     if (filme) {
         printf("Filme encontrado:\n");
         imprime_filme(filme);
+        sprintf(log_mensagem, "Busca binaria pelo filme de codigo %d: SUCESSO. Tempo: %.6f segundos. Comparacoes: %d.",
+                codigo, tempo_decorrido, comparacoes);
         free(filme);
     } else {
         printf("Filme com codigo %d nao encontrado.\n", codigo);
+        sprintf(log_mensagem, "Busca binaria pelo filme de codigo %d: FALHA. Tempo: %.6f segundos. Comparacoes: %d.",
+                codigo, tempo_decorrido, comparacoes);
     }
-    fclose(arq);
 
+    // Registra o log e fecha o arquivo
+    // Para que esta linha funcione, a função registra_log precisa ser "conhecida" aqui.
+    // A melhor forma é declarar o protótipo dela em um dos seus arquivos .h, como "main.h" se existisse,
+    // ou "utils.h", e incluir este .h em filme.c
+    // Por enquanto, como você inclui o filme.c no main.c, isso pode funcionar diretamente.
+    registra_log(log_mensagem);
+    fclose(arq);
+    
 }
 
-void ordenar_por_ano() {
-    FILE* arq = fopen("filmes.dat", "r+b"); // "r+b" para ler e escrever no mesmo arquivo.
-    if (!arq) { printf("Base de dados de filmes vazia.\n"); return; }
+int filme_ja_emprestado(int cod_filme) {
+    FILE* arq_emp = fopen("emprestimos.dat", "rb");
+    if (!arq_emp) {
+        return 0; // Se o arquivo não existe, nenhum filme foi emprestado.
+    }
 
-    printf("Ordenando filmes por ano...\n");
-    ordena_filmes_por_ano(arq);
-    printf("Ordenacao concluida.\n");
-    
-    listar_filmes(); 
+    TEmprestimo* emp;
+    while ((emp = le_emprestimo(arq_emp)) != NULL) {
+        if (emp->codigo_filme == cod_filme) {
+            fclose(arq_emp);
+            free(emp);
+            return 1; // Encontrou o filme no arquivo de empréstimos.
+        }
+        free(emp);
+    }
 
-    /*
-     * Detalhe super importante que discutimos:
-     * A busca binária que usamos no programa depende do arquivo estar ordenado por CÓDIGO.
-     * Se a gente deixasse ordenado por ano, a busca ia parar de funcionar.
-     * Por isso, depois de mostrar a lista por ano, nós ordenamos de volta por código
-     * para não quebrar o resto do programa.
-     */
-    printf("\nReordenando por codigo para manter a busca binaria funcionando...\n");
-    ordena_filmes_por_codigo(arq);
-    fclose(arq);
+    fclose(arq_emp);
+    return 0; // Não encontrou o filme.
 }
 
 void emprestar_filme() {
     int cod_filme, cod_usuario;
+    int dummy_comparacoes = 0;
     printf("Digite o codigo do filme a ser emprestado: ");
     scanf("%d", &cod_filme);
     printf("Digite o codigo do usuario: ");
     scanf("%d", &cod_usuario);
 
-    FILE* arq_filmes = fopen("filmes.dat", "r+b");
-    if (!arq_filmes) { printf("Base de dados de filmes vazia.\n"); return; }
-
-    long pos;
-    TFilme* filme = busca_sequencial_filme(arq_filmes, cod_filme, &pos);
-    
+    // 1. Verificar se o filme existe
+    FILE* arq_filmes = fopen("filmes.dat", "rb");
+    if (!arq_filmes) { printf("ERRO: Base de dados de filmes vazia.\n"); return; }
+    long pos_filme;
+    TFilme* filme = busca_sequencial_filme(arq_filmes, cod_filme, &pos_filme, &dummy_comparacoes);
+    fclose(arq_filmes); 
     if (!filme) {
-        printf("ERRO: Filme nao encontrado.\n");
-        fclose(arq_filmes);
+        printf("ERRO: Filme com codigo %d nao encontrado.\n", cod_filme);
         return;
     }
-    if (!filme->disponivel) {
-        printf("ERRO: TFilme '%s' ja esta emprestado.\n", filme->titulo);
-        free(filme);
-        fclose(arq_filmes);
+    free(filme); 
+
+    // 2. Verificar se o usuário existe
+    FILE* arq_usuarios = fopen("usuarios.dat", "rb");
+    if (!arq_usuarios) { printf("ERRO: Base de dados de usuarios vazia.\n"); return; }
+    long pos_usuario;
+    TUser* usuario = busca_sequencial_usuario(arq_usuarios, cod_usuario, &pos_usuario);
+    fclose(arq_usuarios);
+    if (!usuario) {
+        printf("ERRO: Usuario com codigo %d nao encontrado.\n", cod_usuario);
+        return;
+    }
+    free(usuario);
+
+    // 3. Verificar se o filme já não está emprestado
+    if (filme_ja_emprestado(cod_filme)) {
+        printf("ERRO: O filme de codigo %d ja esta emprestado.\n", cod_filme);
         return;
     }
 
-    // Altera os dados do filme em memória
-    filme->disponivel = 0;
-    filme->codigo_usuario_emprestado = cod_usuario;
+    // 4. Se todas as verificações passaram, criar o empréstimo
+    FILE* arq_emprestimos = fopen("emprestimos.dat", "ab");
+    if (!arq_emprestimos) {
+        printf("ERRO: Nao foi possivel abrir o arquivo de emprestimos.\n");
+        return;
+    }
 
-    // Aqui usamos a posição que a busca nos deu para voltar exatamente no lugar certo do arquivo...
-    fseek(arq_filmes, pos, SEEK_SET);
-    // ... e sobrescrever o registro com os dados novos.
-    salva_filme(filme, arq_filmes);
-
-    printf("Filme '%s' emprestado com sucesso.\n", filme->titulo);
-    free(filme);
-    fclose(arq_filmes);
+    time_t data_atual = time(NULL); 
+    TEmprestimo* novo_emprestimo = emprestimo(cod_filme, cod_usuario, data_atual);
+    salva_emprestimo(novo_emprestimo, arq_emprestimos);
+    
+    printf("Emprestimo do filme %d para o usuario %d realizado com sucesso!\n", cod_filme, cod_usuario);
+    
+    free(novo_emprestimo);
+    fclose(arq_emprestimos);
 }
 
 void devolver_filme() {
-    int cod_filme;
-    printf("Digite o codigo do filme a ser devolvido: ");
+    int cod_filme, cod_usuario;
+    int dummy_comparacoes = 0;
+    printf("Digite o codigo do filme a ser emprestado: ");
     scanf("%d", &cod_filme);
+    printf("Digite o codigo do usuario: ");
+    scanf("%d", &cod_usuario);
 
-    FILE* arq_filmes = fopen("filmes.dat", "r+b");
-    if (!arq_filmes) { printf("Base de dados de filmes vazia.\n"); return; }
-
-    long pos;
-    TFilme* filme = busca_sequencial_filme(arq_filmes, cod_filme, &pos);
-
+    // 1. Verificar se o filme existe
+    FILE* arq_filmes = fopen("filmes.dat", "rb");
+    if (!arq_filmes) { printf("ERRO: Base de dados de filmes vazia.\n"); return; }
+    long pos_filme;
+    TFilme* filme = busca_sequencial_filme(arq_filmes, cod_filme, &pos_filme, &dummy_comparacoes);
+    fclose(arq_filmes); 
     if (!filme) {
-        printf("ERRO: Filme nao encontrado.\n");
-        fclose(arq_filmes);
+        printf("ERRO: Filme com codigo %d nao encontrado.\n", cod_filme);
         return;
     }
-    if (filme->disponivel) {
-        printf("ERRO: Filme '%s' ja estava disponivel.\n", filme->titulo);
-        free(filme);
-        fclose(arq_filmes);
+    free(filme); 
+
+    // 2. Verificar se o usuário existe
+    FILE* arq_usuarios = fopen("usuarios.dat", "rb");
+    if (!arq_usuarios) { printf("ERRO: Base de dados de usuarios vazia.\n"); return; }
+    long pos_usuario;
+    TUser* usuario = busca_sequencial_usuario(arq_usuarios, cod_usuario, &pos_usuario);
+    fclose(arq_usuarios);
+    if (!usuario) {
+        printf("ERRO: Usuario com codigo %d nao encontrado.\n", cod_usuario);
         return;
     }
+    free(usuario);
+
+    // 3. Verificar se o filme já não está emprestado
+    if (filme_ja_emprestado(cod_filme)) {
+        printf("ERRO: O filme de codigo %d ja esta emprestado.\n", cod_filme);
+        return;
+    }
+
+    // 4. Se todas as verificações passaram, criar o empréstimo
+    FILE* arq_emprestimos = fopen("emprestimos.dat", "ab");
+    if (!arq_emprestimos) {
+        printf("ERRO: Nao foi possivel abrir o arquivo de emprestimos.\n");
+        return;
+    }
+
+    time_t data_atual = time(NULL); 
+    TEmprestimo* novo_emprestimo = emprestimo(cod_filme, cod_usuario, data_atual);
+    salva_emprestimo(novo_emprestimo, arq_emprestimos);
     
-    filme->disponivel = 1;
-    filme->codigo_usuario_emprestado = -1;
+    printf("Emprestimo do filme %d para o usuario %d realizado com sucesso!\n", cod_filme, cod_usuario);
+    
+    free(novo_emprestimo);
+    fclose(arq_emprestimos);
 
-    // Mesmo esquema do 'emprestar': volta na posição certa e sobrescreve.
-    fseek(arq_filmes, pos, SEEK_SET);
-    salva_filme(filme, arq_filmes);
-
-    printf("Filme '%s' devolvido com sucesso.\n", filme->titulo);
-    free(filme);
-    fclose(arq_filmes);
 }
 
 void listar_filmes() {
