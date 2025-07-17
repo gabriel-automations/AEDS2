@@ -39,11 +39,11 @@ int compara_por_codigo(TUser* a, TUser* b);
 
 void ordena_usuarios_por_codigo(FILE* arq);
 
-TUser* busca_sequencial_usuario(FILE* arq, int codigo, long* pos);
+TUser* busca_sequencial_usuario(FILE* arq, int codigo, long* pos, int* contador_comparacoes);
 
 void buscar_usuario_sequencial();
 
-TUser* busca_binaria_usuario(FILE* arq, int codigo, long* pos); 
+TUser* busca_binaria_usuario(FILE* arq, int codigo, long* pos, int* contador_comparacoes);
 
 void buscar_usuario_binaria();
 

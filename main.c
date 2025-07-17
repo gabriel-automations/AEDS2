@@ -145,6 +145,7 @@ int get_next_codigo(const char* filename, int record_size) {
 
 void consultar_emprestimo_filme() {
     int cod_filme;
+    int dummy_comparacoes = 0;
     printf("Digite o codigo do filme para consultar: ");
     scanf("%d", &cod_filme);
 
@@ -162,7 +163,7 @@ void consultar_emprestimo_filme() {
             FILE* arq_usuarios = fopen("usuarios.dat", "rb");
             if (arq_usuarios) {
                 long pos;
-                TUser* usuario = busca_sequencial_usuario(arq_usuarios, emp->codigo_usuario, &pos);
+                TUser* usuario = busca_sequencial_usuario(arq_usuarios, emp->codigo_usuario, &pos, &dummy_comparacoes);
                 if (usuario) {
                     printf("INFO: O filme de codigo %d esta emprestado para o usuario: %s (Cod: %d).\n",
                            cod_filme, usuario->nome, usuario->codigo);
@@ -188,6 +189,7 @@ void consultar_emprestimo_filme() {
 
 void contar_filmes_por_usuario() {
     int cod_usuario;
+    int dummy_comparacoes = 0;
     printf("Digite o codigo do usuario para consultar: ");
     scanf("%d", &cod_usuario);
 
@@ -198,7 +200,7 @@ void contar_filmes_por_usuario() {
         return;
     }
     long pos;
-    TUser* usuario = busca_sequencial_usuario(arq_usuarios, cod_usuario, &pos);
+    TUser* usuario = busca_sequencial_usuario(arq_usuarios, cod_usuario, &pos, &dummy_comparacoes);
     fclose(arq_usuarios);
     if (!usuario) {
         printf("ERRO: Usuario com codigo %d nao encontrado.\n", cod_usuario);

@@ -467,9 +467,10 @@ void emprestar_filme() {
 
     // 2. Verificar se o usuário existe
     FILE* arq_usuarios = fopen("usuarios.dat", "rb");
+    dummy_comparacoes = 0;
     if (!arq_usuarios) { printf("ERRO: Base de dados de usuarios vazia.\n"); return; }
     long pos_usuario;
-    TUser* usuario = busca_sequencial_usuario(arq_usuarios, cod_usuario, &pos_usuario);
+    TUser* usuario = busca_sequencial_usuario(arq_usuarios, cod_usuario, &pos_usuario, &dummy_comparacoes);
     fclose(arq_usuarios);
     if (!usuario) {
         printf("ERRO: Usuario com codigo %d nao encontrado.\n", cod_usuario);
@@ -524,7 +525,7 @@ void devolver_filme() {
     FILE* arq_usuarios = fopen("usuarios.dat", "rb");
     if (!arq_usuarios) { printf("ERRO: Base de dados de usuarios vazia.\n"); return; }
     long pos_usuario;
-    TUser* usuario = busca_sequencial_usuario(arq_usuarios, cod_usuario, &pos_usuario);
+    TUser* usuario = busca_sequencial_usuario(arq_usuarios, cod_usuario, &pos_usuario, &dummy_comparacoes);
     fclose(arq_usuarios);
     if (!usuario) {
         printf("ERRO: Usuario com codigo %d nao encontrado.\n", cod_usuario);

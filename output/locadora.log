@@ -1,0 +1,5 @@
+[Fri Jul 11 19:47:28 2025] Busca sequencial pelo filme de codigo 5: SUCESSO. Tempo: 0.000000 segundos. Comparacoes: 5.
+[Fri Jul 11 19:48:43 2025] Busca binaria pelo filme de codigo 6: SUCESSO. Tempo: 0.000000 segundos. Comparacoes: 11.
+[Fri Jul 11 19:49:12 2025] Ordenacao por CODIGO (Selection Sort em Disco): Concluida. Tempo: 0.002000 segundos. Comparacoes: 190.
+[Wed Jul 16 21:23:27 2025] Busca sequencial pelo usuario de codigo 8: SUCESSO. Tempo: 0.002000 segundos. Comparacoes: 8.
+[Wed Jul 16 21:23:48 2025] Busca binaria pelo usuario de codigo 8: SUCESSO. Tempo: 0.000000 segundos. Comparacoes: 5.

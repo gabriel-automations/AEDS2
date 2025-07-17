@@ -2,6 +2,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <time.h>
+
 
 int tamanho_registro_usuario() {
     return sizeof(int)      // cod
@@ -119,7 +121,7 @@ void embaralhar_vetor_usuario(int* vet, int tam) {
 }
 
 // Função genérica para ordenar em disco com Selection Sort
-void selection_sort_disco_usuario(FILE* arq, int (*comparador)(TUser*, TUser*)) {
+void selection_sort_disco_usuario(FILE* arq, int (*comparador)(TUser*, TUser*), int* contador_comparacoes) {
     int num_registros = tamanho_arquivo_usuarios(arq);
     rewind(arq);
 
@@ -132,15 +134,16 @@ void selection_sort_disco_usuario(FILE* arq, int (*comparador)(TUser*, TUser*)) 
         for (int j = i + 1; j < num_registros; j++) {
             long pos_atual = j * tamanho_registro_usuario();
             fseek(arq, pos_atual, SEEK_SET);
-            TUser* u_atual = le_usuario(arq);
+           TUser* u_atual = le_usuario(arq);
 
+            (*contador_comparacoes)++; // <-- ADICIONE ESTA LINHA
             if (comparador(u_atual, u_min) < 0) {
-                free(u_min); // Libera o antigo mínimo
+                free(u_min);
                 u_min = u_atual;
                 pos_min = pos_atual;
             } else {
-                free(u_atual); // Libera o atual se não for o novo mínimo
-            }
+                free(u_atual);
+}
         }
 
         // Lê o registro da posição 'i' para a troca
@@ -165,26 +168,51 @@ int compara_por_codigo_u(TUser* a, TUser* b) {
     return a->codigo - b->codigo;
 }
 
+// Em usuario.c
 void ordena_usuarios_por_codigo(FILE* arq) {
-    printf("Ordenacao Feita!!");
-    selection_sort_disco_usuario(arq, compara_por_codigo_u);
+    printf("Ordenando usuarios por codigo. Isso pode levar um tempo...\n");
+
+    // Variáveis para medição
+    int comparacoes = 0;
+    clock_t inicio, fim;
+    double tempo_decorrido;
+    char log_mensagem[200];
+
+    // Inicia a medição de tempo
+    inicio = clock();
+
+    // Chama a nova versão da função de ordenação
+    selection_sort_disco_usuario(arq, compara_por_codigo_u, &comparacoes);
+
+    // Termina a medição de tempo
+    fim = clock();
+    tempo_decorrido = ((double)(fim - inicio)) / CLOCKS_PER_SEC;
+
+    printf("Ordenacao concluida!\n");
+
+    // Prepara e registra a mensagem de log
+    sprintf(log_mensagem, "Ordenacao de USUARIOS por codigo (Selection Sort em Disco): Concluida. Tempo: %.6f segundos. Comparacoes: %d.",
+            tempo_decorrido, comparacoes);
+    registra_log(log_mensagem);
 }
 
-TUser* busca_sequencial_usuario(FILE* arq, int codigo, long* pos) {
+TUser* busca_sequencial_usuario(FILE* arq, int codigo, long* pos, int* contador_comparacoes) {
     rewind(arq);
     TUser* usuario;
     while ((usuario = le_usuario(arq)) != NULL) {
+        (*contador_comparacoes)++; // Incrementa a cada usuário lido e comparado
+
         if (usuario->codigo == codigo) {
-            // Calcula a posição do início do registro encontrado
             *pos = ftell(arq) - tamanho_registro_usuario();
             return usuario;
         }
-        free(usuario); // Libera a memória se não for o usuario procurado
+        free(usuario);
     }
     *pos = -1;
     return NULL;
 }
 
+// Em usuario.c
 void buscar_usuario_sequencial() {
     int codigo;
     printf("Digite o codigo do Usuario para busca sequencial: ");
@@ -192,42 +220,67 @@ void buscar_usuario_sequencial() {
 
     FILE* arq = fopen("usuarios.dat", "rb");
     if (!arq) { printf("Base de dados de usuarios vazia.\n"); return; }
-    
+
+    // Variáveis para medição de desempenho
     long pos;
-    TUser* usuario = busca_sequencial_usuario(arq, codigo, &pos);
-    
+    int comparacoes = 0;
+    clock_t inicio, fim;
+    double tempo_decorrido;
+    char log_mensagem[200];
+
+    // Inicia a contagem do tempo
+    inicio = clock();
+
+    // Chama a nova versão da função, passando o endereço do contador
+    TUser* usuario = busca_sequencial_usuario(arq, codigo, &pos, &comparacoes);
+
+    // Termina a contagem do tempo
+    fim = clock();
+    tempo_decorrido = ((double)(fim - inicio)) / CLOCKS_PER_SEC;
+
+    // Prepara a mensagem de log
     if (usuario) {
         printf("Usuario encontrado:\n");
         imprime_usuario(usuario);
+        sprintf(log_mensagem, "Busca sequencial pelo usuario de codigo %d: SUCESSO. Tempo: %.6f segundos. Comparacoes: %d.",
+                codigo, tempo_decorrido, comparacoes);
         free(usuario);
     } else {
         printf("Usuario com codigo %d nao encontrado.\n", codigo);
+        sprintf(log_mensagem, "Busca sequencial pelo usuario de codigo %d: FALHA. Tempo: %.6f segundos. Comparacoes: %d.",
+                codigo, tempo_decorrido, comparacoes);
     }
+
+    // Registra o log e fecha o arquivo
+    registra_log(log_mensagem);
     fclose(arq);
 }
 
-TUser* busca_binaria_usuario(FILE* arq, int codigo, long* pos) {
+TUser* busca_binaria_usuario(FILE* arq, int codigo, long* pos, int* contador_comparacoes) {
     int num_registros = tamanho_arquivo_usuarios(arq);
     int inicio = 0, fim = num_registros - 1;
     TUser* usuario = NULL;
 
     while (inicio <= fim) {
+        (*contador_comparacoes)++; // Incrementa para cada iteração do loop
         int meio = inicio + (fim - inicio) / 2;
         *pos = meio * tamanho_registro_usuario();
         fseek(arq, *pos, SEEK_SET);
 
         usuario = le_usuario(arq);
-        if (!usuario) break; // Segurança
+        if (!usuario) break;
 
+        (*contador_comparacoes)++; // Incrementa para a comparação de igualdade
         if (usuario->codigo == codigo) {
             return usuario;
         }
+        (*contador_comparacoes)++; // Incrementa para a comparação de menor/maior
         if (usuario->codigo < codigo) {
             inicio = meio + 1;
         } else {
             fim = meio - 1;
         }
-        free(usuario); // Libera o registro do meio se não for o certo
+        free(usuario);
     }
     *pos = -1;
     return NULL;
@@ -241,16 +294,38 @@ void buscar_usuario_binaria() {
     FILE* arq = fopen("usuarios.dat", "rb");
     if (!arq) { printf("Base de dados de usuario vazia.\n"); return; }
 
+    // Variáveis para medição de desempenho
     long pos;
-    TUser* usuario = busca_binaria_usuario(arq, codigo, &pos);
-    
+    int comparacoes = 0;
+    clock_t inicio, fim;
+    double tempo_decorrido;
+    char log_mensagem[200];
+
+    // Inicia a contagem do tempo
+    inicio = clock();
+
+    // Chama a nova versão da função, passando o endereço do contador
+    TUser* usuario = busca_binaria_usuario(arq, codigo, &pos, &comparacoes);
+
+    // Termina a contagem do tempo
+    fim = clock();
+    tempo_decorrido = ((double)(fim - inicio)) / CLOCKS_PER_SEC;
+
+    // Prepara a mensagem de log
     if (usuario) {
         printf("Usuario encontrado:\n");
         imprime_usuario(usuario);
+        sprintf(log_mensagem, "Busca binaria pelo usuario de codigo %d: SUCESSO. Tempo: %.6f segundos. Comparacoes: %d.",
+                codigo, tempo_decorrido, comparacoes);
         free(usuario);
     } else {
         printf("Usuario com codigo %d nao encontrado.\n", codigo);
+        sprintf(log_mensagem, "Busca binaria pelo usuario de codigo %d: FALHA. Tempo: %.6f segundos. Comparacoes: %d.",
+                codigo, tempo_decorrido, comparacoes);
     }
+
+    // Registra o log e fecha o arquivo
+    registra_log(log_mensagem);
     fclose(arq);
 }
 
