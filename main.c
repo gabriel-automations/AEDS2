@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "filme.h"
 #include "usuario.h"
@@ -30,6 +31,7 @@ void exibe_menu() {
     printf("14. Gerar Nova Base de Dados de Filmes e Usuarios\n");
     printf("15. Consultar emprestimo por filme\n");
     printf("16. Contar filmes por usuario\n");
+    printf("17. Ordenar Usuarios (Selecao Natural + Intercalacao)\n"); // TRABALHO 2
     printf("0. Sair\n");
     printf("====================================================\n");
     printf("Escolha uma opcao: ");
@@ -118,6 +120,17 @@ int main() {
             case 14: geradorBases(); break;
             case 15: consultar_emprestimo_filme(); break;
             case 16: contar_filmes_por_usuario(); break;
+            case 17:
+            // 1. Fechamos o arquivo que o main.c mantém aberto, liberando o "cadeado".
+                fclose(arq_usuarios);
+                // 2. Executamos a função de ordenação, que agora tem permissão para apagar e renomear o arquivo.
+                ordenar_usuarios_selecao_natural();
+                // 3. Reabrimos o arquivo para que as outras opções do menu voltem a funcionar.
+                arq_usuarios = fopen("usuarios.dat", "r+b");
+                if (arq_usuarios == NULL) {
+                    return -1; // Encerra o programa se não conseguir reabrir
+                }
+                break;
             case 0: printf("Saindo...\n"); break;
             default: printf("Opcao invalida!\n"); break;
         }

@@ -47,7 +47,7 @@ TUser* busca_binaria_usuario(FILE* arq, int codigo, long* pos, int* contador_com
 
 void buscar_usuario_binaria();
 
-
+void ordenar_usuarios_selecao_natural();
 
 
 #endif // USUARIO_H

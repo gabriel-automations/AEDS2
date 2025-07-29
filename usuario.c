@@ -329,3 +329,232 @@ void buscar_usuario_binaria() {
     fclose(arq);
 }
 
+// ------------------------------------------
+// |               TRABALHO 2               |
+// ------------------------------------------
+
+
+#include <stdbool.h> // Necessário para usar o tipo 'bool'
+// Define o tamanho da memória interna (quantos registros podemos manter em memória)
+#define MEMORIA_INTERNA 6
+
+
+/*
+ * Função auxiliar para encontrar o usuário com o menor código em um vetor de usuários.
+ * Retorna o índice do menor usuário. Ignora posições nulas ou congeladas.
+ */
+int encontrar_menor_usuario(TUser* memoria[], bool congelado[], int tam) {
+    int idx_menor = -1;
+    TUser* menor_usuario = NULL;
+
+    for (int i = 0; i < tam; i++) {
+        // Se o registro não estiver congelado e existir
+        if (!congelado[i] && memoria[i] != NULL) {
+            if (menor_usuario == NULL || memoria[i]->codigo < menor_usuario->codigo) {
+                menor_usuario = memoria[i];
+                idx_menor = i;
+            }
+        }
+    }
+    return idx_menor;
+}
+
+/*
+ * ETAPA 1: SELEÇÃO NATURAL (ou Seleção por Substituição) - VERSÃO CORRIGIDA
+ * Lê o arquivo de usuários e cria várias partições (arquivos) menores já ordenadas.
+ */
+int selecao_natural_usuarios(FILE* in) {
+    // Inicializa o reservatório (memória interna)
+    TUser* memoria[MEMORIA_INTERNA];
+    bool congelado[MEMORIA_INTERNA];
+    int registros_na_memoria = 0; // Nome da variável alterado para maior clareza
+
+    // Preenche a memória inicial
+    for (int i = 0; i < MEMORIA_INTERNA; i++) {
+        memoria[i] = le_usuario(in);
+        congelado[i] = false;
+        if (memoria[i] != NULL) {
+            registros_na_memoria++; // Conta apenas os registros que foram realmente lidos
+        }
+    }
+
+    int num_particoes = 0;
+    // O loop principal agora depende diretamente dos registros que estão na memória
+    while (registros_na_memoria > 0) {
+        // Abre um novo arquivo de partição para escrita
+        char nome_particao[30];
+        sprintf(nome_particao, "particao_usuario_%d.dat", num_particoes);
+        FILE* out_particao = fopen(nome_particao, "wb");
+        if (!out_particao) {
+            printf("Erro ao criar arquivo de particao.\n");
+            return -1;
+        }
+
+        // Descongela todos os registros para iniciar uma nova partição
+        for(int i = 0; i < MEMORIA_INTERNA; i++) {
+            congelado[i] = false;
+        }
+
+        TUser* ultimo_escrito = NULL;
+        int menor_idx;
+
+        // Loop para gerar uma partição
+        while ((menor_idx = encontrar_menor_usuario(memoria, congelado, MEMORIA_INTERNA)) != -1) {
+            // Pega o ponteiro para o menor usuário para salvá-lo
+            TUser* menor_atual = memoria[menor_idx];
+            
+            // Salva o menor no arquivo de partição
+            salva_usuario(menor_atual, out_particao);
+
+            // Tenta substituir o registro salvo por um novo do arquivo principal
+            memoria[menor_idx] = le_usuario(in);
+
+            // Se a substituição falhou (fim do arquivo de entrada)
+            if (memoria[menor_idx] == NULL) {
+                registros_na_memoria--; // *** CORREÇÃO CHAVE 1: Decrementa a contagem
+            } else {
+                // Se o novo registro for menor que o último escrito, ele é congelado
+                if (menor_atual->codigo > memoria[menor_idx]->codigo) {
+                    congelado[menor_idx] = true;
+                }
+                // *** CORREÇÃO CHAVE 2: O contador NÃO é incrementado aqui.
+            }
+            
+            // *** CORREÇÃO CHAVE 3: Libera a memória do registro que já foi salvo no disco.
+            free(menor_atual); 
+        }
+
+        fclose(out_particao);
+        num_particoes++;
+    }
+
+    return num_particoes;
+}
+
+
+/*
+ * ETAPA 2: INTERCALAÇÃO ÓTIMA
+ * Junta as partições ordenadas em um único arquivo final ordenado.
+ */
+int intercalacao_otima_usuarios(int num_particoes) {
+    FILE* out_final = fopen("usuarios_ordenado.dat", "wb");
+    if (!out_final) { /* ... */ }
+
+    FILE* particoes[num_particoes];
+    TUser* competidores[num_particoes];
+    int comparacoes = 0;
+
+    for (int i = 0; i < num_particoes; i++) {
+        char nome_particao[30];
+        // CORREÇÃO APLICADA AQUI
+        sprintf(nome_particao, "particao_usuario_%d.dat", i);
+        particoes[i] = fopen(nome_particao, "rb");
+        if (particoes[i]) {
+            competidores[i] = le_usuario(particoes[i]);
+        } else {
+            competidores[i] = NULL;
+        }
+    }
+
+    while (true) {
+        int idx_menor = -1;
+        TUser* menor_usuario = NULL;
+        for (int i = 0; i < num_particoes; i++) {
+            if (competidores[i] != NULL) {
+                if (menor_usuario == NULL || competidores[i]->codigo < menor_usuario->codigo) {
+                    menor_usuario = competidores[i];
+                    idx_menor = i;
+                }
+                if (menor_usuario != competidores[i]) comparacoes++;
+            }
+        }
+        if (idx_menor == -1) break;
+
+        salva_usuario(menor_usuario, out_final);
+        free(menor_usuario);
+        competidores[idx_menor] = le_usuario(particoes[idx_menor]);
+    }
+
+    for (int i = 0; i < num_particoes; i++) {
+        if (particoes[i]) {
+            fclose(particoes[i]);
+            char nome_particao[30];
+            // CORREÇÃO APLICADA AQUI TAMBÉM
+            sprintf(nome_particao, "particao_usuario_%d.dat", i);
+            remove(nome_particao);
+        }
+    }
+    fclose(out_final);
+
+    remove("usuarios.dat");
+    rename("usuarios_ordenado.dat", "usuarios.dat");
+
+    return comparacoes;
+}
+
+
+/*
+ * Função principal (orquestradora) que o usuário chamará pelo menu.
+ */
+void ordenar_usuarios_selecao_natural() {
+    FILE* arq = fopen("usuarios.dat", "rb");
+    if (!arq) {
+        printf("Base de dados de usuarios vazia ou nao existe.\n");
+        return;
+    }
+    
+    char log_msg[200];
+    clock_t inicio, fim;
+    double tempo_decorrido;
+
+    printf("\nIniciando ordenacao externa para Usuarios...\n");
+    printf("ETAPA 1: Gerando particoes com Selecao Natural...\n");
+
+    // --- Executa a Seleção Natural ---
+    inicio = clock();
+    int num_particoes = selecao_natural_usuarios(arq);
+    fim = clock();
+    
+    // >>>>> CORREÇÃO CRÍTICA AQUI <<<<<
+    // Fecha o arquivo original APÓS a leitura ter sido concluída.
+    // Isso o "libera" para que possa ser removido e substituído mais tarde.
+    fclose(arq);
+
+    tempo_decorrido = ((double)(fim - inicio)) / CLOCKS_PER_SEC;
+
+    if (num_particoes == -1) return; // Se houve erro na criação das partições
+
+    // Imprime e registra o log da ETAPA 1
+    printf("\n*****************************************\n");
+    printf("Selecao Natural - TUsuario:\n");
+    printf("Numero de particoes criadas: %d\n", num_particoes);
+    printf("Tempo de execucao: %.2f segundos\n", tempo_decorrido);
+    printf("*****************************************\n");
+    sprintf(log_msg, "Selecao Natural - TUsuario: Particoes criadas: %d. Tempo: %.4f s.", num_particoes, tempo_decorrido);
+    registra_log(log_msg);
+
+    if (num_particoes <= 1) {
+        printf("\nArquivo de usuarios ja ordenado ou vazio.\n");
+        // Se há 1 partição, a função de intercalação já a renomeou para usuarios.dat
+        return;
+    }
+
+    printf("\nETAPA 2: Intercalando particoes...\n");
+
+    // --- Executa a Intercalação Ótima ---
+    inicio = clock();
+    int comparacoes = intercalacao_otima_usuarios(num_particoes);
+    fim = clock();
+    tempo_decorrido = ((double)(fim - inicio)) / CLOCKS_PER_SEC;
+
+    // Imprime e registra o log da ETAPA 2
+    printf("\n*****************************************\n");
+    printf("Intercalacao Otima - TUsuario:\n");
+    printf("Numero de comparacoes: %d\n", comparacoes);
+    printf("Tempo de execucao: %.2f segundos\n", tempo_decorrido);
+    printf("*****************************************\n");
+    sprintf(log_msg, "Intercalacao Otima - TUsuario: Comparacoes: %d. Tempo: %.4f s.", comparacoes, tempo_decorrido);
+    registra_log(log_msg);
+
+    printf("\nArquivo de usuarios ordenado com sucesso!\n");
+}
