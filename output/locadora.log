@@ -1,0 +1,21 @@
+[Tue Jul 29 01:18:07 2025] Busca sequencial pelo usuario de codigo 940: SUCESSO. Tempo: 0.001000 segundos. Comparacoes: 474.
+[Tue Jul 29 01:18:20 2025] Selecao Natural - TUsuario: Particoes criadas: 74. Tempo: 0.0830 s.
+[Tue Jul 29 01:18:20 2025] Intercalacao Otima - TUsuario: Comparacoes: 0. Tempo: 0.0230 s.
+[Tue Jul 29 01:27:20 2025] Selecao Natural - TUsuario: Particoes criadas: 79. Tempo: 0.0910 s.
+[Tue Jul 29 01:27:20 2025] Intercalacao Otima - TUsuario: Comparacoes: 66373. Tempo: 0.2490 s.
+[Tue Jul 29 01:27:41 2025] Selecao Natural - TUsuario: Particoes criadas: 79. Tempo: 0.0860 s.
+[Tue Jul 29 01:27:41 2025] Intercalacao Otima - TUsuario: Comparacoes: 66373. Tempo: 0.0440 s.
+[Tue Jul 29 01:36:15 2025] Selecao Natural - TUsuario: Particoes criadas: 79. Tempo: 0.0790 s.
+[Tue Jul 29 01:36:15 2025] Intercalacao Otima - TUsuario: Comparacoes: 66373. Tempo: 0.0560 s.
+[Tue Jul 29 01:36:27 2025] Selecao Natural - TUsuario: Particoes criadas: 79. Tempo: 0.0650 s.
+[Tue Jul 29 01:36:27 2025] Intercalacao Otima - TUsuario: Comparacoes: 66373. Tempo: 0.0890 s.
+[Tue Jul 29 01:38:15 2025] Selecao Natural - TUsuario: Particoes criadas: 77. Tempo: 0.0850 s.
+[Tue Jul 29 01:38:15 2025] Intercalacao Otima - TUsuario: Comparacoes: 64909. Tempo: 0.5960 s.
+[Tue Jul 29 01:41:51 2025] Selecao Natural - TUsuario: Particoes criadas: 77. Tempo: 0.0710 s.
+[Tue Jul 29 01:41:51 2025] Intercalacao Otima - TUsuario: Comparacoes: 64909. Tempo: 0.1390 s.
+[Tue Jul 29 14:05:32 2025] Busca binaria pelo filme de codigo 2: FALHA. Tempo: 0.003000 segundos. Comparacoes: 27.
+[Tue Jul 29 14:05:41 2025] Ordenacao por CODIGO (Selection Sort em Disco): Concluida. Tempo: 1.664000 segundos. Comparacoes: 499500.
+[Tue Jul 29 14:05:45 2025] Busca binaria pelo filme de codigo 2: SUCESSO. Tempo: 0.000000 segundos. Comparacoes: 29.
+[Tue Jul 29 14:05:57 2025] Busca binaria pelo filme de codigo 2: SUCESSO. Tempo: 0.000000 segundos. Comparacoes: 29.
+[Tue Jul 29 14:06:05 2025] Busca binaria pelo filme de codigo 3: SUCESSO. Tempo: 0.000000 segundos. Comparacoes: 23.
+[Tue Jul 29 14:06:33 2025] Busca binaria pelo filme de codigo 2: SUCESSO. Tempo: 0.000000 segundos. Comparacoes: 29.

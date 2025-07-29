@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "emprestimo.h": "c",
+        "usuario.h": "c",
+        "stdio.h": "c"
+    }
+}
