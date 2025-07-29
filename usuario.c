@@ -412,16 +412,13 @@ int selecao_natural_usuarios(FILE* in) {
 
             // Se a substituição falhou (fim do arquivo de entrada)
             if (memoria[menor_idx] == NULL) {
-                registros_na_memoria--; // *** CORREÇÃO CHAVE 1: Decrementa a contagem
+                registros_na_memoria--;
             } else {
                 // Se o novo registro for menor que o último escrito, ele é congelado
                 if (menor_atual->codigo > memoria[menor_idx]->codigo) {
                     congelado[menor_idx] = true;
                 }
-                // *** CORREÇÃO CHAVE 2: O contador NÃO é incrementado aqui.
             }
-            
-            // *** CORREÇÃO CHAVE 3: Libera a memória do registro que já foi salvo no disco.
             free(menor_atual); 
         }
 
@@ -529,17 +526,18 @@ int intercalacao_otima_usuarios(int num_particoes) {
     int num_passo = 0;
     // Continua intercalando enquanto houver mais de 1 partição
     while (num_particoes > 1) {
-        int qtd_lotes = ceil((double)num_particoes / FATOR_INTERCALACAO);
-        char** nomes_saida_lotes = malloc(sizeof(char*) * qtd_lotes);
+        int qtd_lotes = ceil((double)num_particoes / FATOR_INTERCALACAO); //numero de lotes que serao usados
+        char** nomes_saida_lotes = malloc(sizeof(char*) * qtd_lotes); // memoria para o nome de saida dos lotes
 
         // Processa lote por lote
         for (int i = 0; i < qtd_lotes; i++) {
             int inicio_lote = i * FATOR_INTERCALACAO;
             int fim_lote = inicio_lote + FATOR_INTERCALACAO;
+            //reduz o fim_lote se ultrapassar o número total de partições
             if (fim_lote > num_particoes) {
                 fim_lote = num_particoes;
             }
-            int qtd_arquivos_lote = fim_lote - inicio_lote;
+            int qtd_arquivos_lote = fim_lote - inicio_lote; // Quantidade de arquivos no lote atual
 
             // Define o nome do arquivo de saída para este lote
             nomes_saida_lotes[i] = malloc(sizeof(char) * 30);
