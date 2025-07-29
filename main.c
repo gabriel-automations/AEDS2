@@ -179,11 +179,11 @@ void consultar_emprestimo_filme() {
                 TUser* usuario = busca_sequencial_usuario(arq_usuarios, emp->codigo_usuario, &pos, &dummy_comparacoes);
                 if (usuario) {
                     printf("INFO: O filme de codigo %d esta emprestado para o usuario: %s (Cod: %d).\n",
-                           cod_filme, usuario->nome, usuario->codigo);
+                        cod_filme, usuario->nome, usuario->codigo);
                     free(usuario);
                 } else {
                     printf("INFO: O filme de codigo %d esta emprestado para o usuario de codigo %d (nome nao encontrado).\n",
-                           cod_filme, emp->codigo_usuario);
+                        cod_filme, emp->codigo_usuario);
                 }
                 fclose(arq_usuarios);
             }
@@ -242,7 +242,7 @@ void contar_filmes_por_usuario() {
     }
 
     printf("INFO: O usuario %s (Cod: %d) possui %d filme(s) emprestado(s).\n",
-           nome_usuario, cod_usuario, contador);
+        nome_usuario, cod_usuario, contador);
 
     fclose(arq_emp);
 }

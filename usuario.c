@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <windows.h>
+#include <math.h>
 
 
 int tamanho_registro_usuario() {
@@ -134,7 +136,7 @@ void selection_sort_disco_usuario(FILE* arq, int (*comparador)(TUser*, TUser*), 
         for (int j = i + 1; j < num_registros; j++) {
             long pos_atual = j * tamanho_registro_usuario();
             fseek(arq, pos_atual, SEEK_SET);
-           TUser* u_atual = le_usuario(arq);
+            TUser* u_atual = le_usuario(arq);
 
             (*contador_comparacoes)++; // <-- ADICIONE ESTA LINHA
             if (comparador(u_atual, u_min) < 0) {
@@ -360,7 +362,7 @@ int encontrar_menor_usuario(TUser* memoria[], bool congelado[], int tam) {
 }
 
 /*
- * ETAPA 1: SELEÇÃO NATURAL (ou Seleção por Substituição) - VERSÃO CORRIGIDA
+ * ETAPA 1: SELEÇÃO NATURAL
  * Lê o arquivo de usuários e cria várias partições (arquivos) menores já ordenadas.
  */
 int selecao_natural_usuarios(FILE* in) {
@@ -430,27 +432,25 @@ int selecao_natural_usuarios(FILE* in) {
     return num_particoes;
 }
 
+#define FATOR_INTERCALACAO 500 // Quantas partições vamos intercalar por vez
 
-/*
- * ETAPA 2: INTERCALAÇÃO ÓTIMA
- * Junta as partições ordenadas em um único arquivo final ordenado.
- */
-int intercalacao_otima_usuarios(int num_particoes) {
-    FILE* out_final = fopen("usuarios_ordenado.dat", "wb");
-    if (!out_final) { /* ... */ }
+// Função auxiliar para a intercalação de um lote de arquivos
+int intercalar_lote(char* nomes_entrada[], int qtd_arquivos, char* nome_saida, int* comparacoes) {
+    FILE* out = fopen(nome_saida, "wb");
+    if (!out) {
+        printf("Erro ao criar arquivo de saida temporario: %s\n", nome_saida);
+        return -1;
+    }
 
-    FILE* particoes[num_particoes];
-    TUser* competidores[num_particoes];
-    int comparacoes = 0;
+    FILE* entradas[qtd_arquivos];
+    TUser* competidores[qtd_arquivos];
 
-    for (int i = 0; i < num_particoes; i++) {
-        char nome_particao[30];
-        // CORREÇÃO APLICADA AQUI
-        sprintf(nome_particao, "particao_usuario_%d.dat", i);
-        particoes[i] = fopen(nome_particao, "rb");
-        if (particoes[i]) {
-            competidores[i] = le_usuario(particoes[i]);
+    for (int i = 0; i < qtd_arquivos; i++) {
+        entradas[i] = fopen(nomes_entrada[i], "rb");
+        if (entradas[i]) {
+            competidores[i] = le_usuario(entradas[i]);
         } else {
+            printf("ERRO CRITICO: Nao foi possivel abrir a particao de entrada: %s\n", nomes_entrada[i]);
             competidores[i] = NULL;
         }
     }
@@ -458,35 +458,110 @@ int intercalacao_otima_usuarios(int num_particoes) {
     while (true) {
         int idx_menor = -1;
         TUser* menor_usuario = NULL;
-        for (int i = 0; i < num_particoes; i++) {
+        for (int i = 0; i < qtd_arquivos; i++) {
             if (competidores[i] != NULL) {
                 if (menor_usuario == NULL || competidores[i]->codigo < menor_usuario->codigo) {
                     menor_usuario = competidores[i];
                     idx_menor = i;
                 }
-                if (menor_usuario != competidores[i]) comparacoes++;
+                if(menor_usuario != competidores[i]) (*comparacoes)++;
             }
         }
         if (idx_menor == -1) break;
-
-        salva_usuario(menor_usuario, out_final);
+        
+        salva_usuario(menor_usuario, out);
         free(menor_usuario);
-        competidores[idx_menor] = le_usuario(particoes[idx_menor]);
+        competidores[idx_menor] = le_usuario(entradas[idx_menor]);
     }
 
-    for (int i = 0; i < num_particoes; i++) {
-        if (particoes[i]) {
-            fclose(particoes[i]);
-            char nome_particao[30];
-            // CORREÇÃO APLICADA AQUI TAMBÉM
-            sprintf(nome_particao, "particao_usuario_%d.dat", i);
-            remove(nome_particao);
+    fclose(out);
+
+    for (int i = 0; i < qtd_arquivos; i++) {
+        if(entradas[i]) {
+            fclose(entradas[i]);
         }
-    }
-    fclose(out_final);
 
+        int tentativas = 0;
+        while (remove(nomes_entrada[i]) != 0 && tentativas < 5) {
+            tentativas++;
+            #ifdef _WIN32
+                Sleep(10);
+            #else
+                usleep(10000);
+            #endif
+        }
+        if (tentativas >= 5) {
+            perror("ERRO CRITICO: Nao foi possivel apagar o arquivo apos varias tentativas");
+            printf(" -> Arquivo problematico: %s\n", nomes_entrada[i]);
+        }
+        
+        free(nomes_entrada[i]);
+    }
+    
+    return 0;
+}
+
+
+/*
+ * ETAPA 2: INTERCALAÇÃO ÓTIMA
+ * Junta as partições ordenadas em um único arquivo final ordenado.
+ */
+int intercalacao_otima_usuarios(int num_particoes) {
+    if (num_particoes == 0) return 0;
+
+    // Se só existe uma partição, ela já está ordenada. Apenas renomeamos.
+    if (num_particoes == 1) {
+        char nome_particao[30];
+        sprintf(nome_particao, "particao_usuario_0.dat");
+        remove("usuarios.dat");
+        rename(nome_particao, "usuarios.dat");
+        return 0;
+    }
+
+    int comparacoes = 0;
+    // Aloca memória para guardar os nomes de todas as partições atuais
+    char** nomes_particoes = malloc(sizeof(char*) * num_particoes);
+    for (int i = 0; i < num_particoes; i++) {
+        nomes_particoes[i] = malloc(sizeof(char) * 30);
+        sprintf(nomes_particoes[i], "particao_usuario_%d.dat", i);
+    }
+
+    int num_passo = 0;
+    // Continua intercalando enquanto houver mais de 1 partição
+    while (num_particoes > 1) {
+        int qtd_lotes = ceil((double)num_particoes / FATOR_INTERCALACAO);
+        char** nomes_saida_lotes = malloc(sizeof(char*) * qtd_lotes);
+
+        // Processa lote por lote
+        for (int i = 0; i < qtd_lotes; i++) {
+            int inicio_lote = i * FATOR_INTERCALACAO;
+            int fim_lote = inicio_lote + FATOR_INTERCALACAO;
+            if (fim_lote > num_particoes) {
+                fim_lote = num_particoes;
+            }
+            int qtd_arquivos_lote = fim_lote - inicio_lote;
+
+            // Define o nome do arquivo de saída para este lote
+            nomes_saida_lotes[i] = malloc(sizeof(char) * 30);
+            sprintf(nomes_saida_lotes[i], "temp_passo%d_lote%d.dat", num_passo, i);
+            
+            // Chama a função para intercalar o lote atual
+            intercalar_lote(&nomes_particoes[inicio_lote], qtd_arquivos_lote, nomes_saida_lotes[i], &comparacoes);
+        }
+        
+        free(nomes_particoes); // Libera a lista de nomes antiga
+        nomes_particoes = nomes_saida_lotes; // A nova lista de partições são as saídas dos lotes
+        num_particoes = qtd_lotes; // Atualiza o número de partições para o próximo passo
+        num_passo++;
+    }
+
+    // Ao final, sobrará apenas um arquivo na lista, que é o arquivo final ordenado
     remove("usuarios.dat");
-    rename("usuarios_ordenado.dat", "usuarios.dat");
+    rename(nomes_particoes[0], "usuarios.dat");
+    
+    // Limpa a memória do último nome de arquivo restante
+    free(nomes_particoes[0]);
+    free(nomes_particoes);
 
     return comparacoes;
 }
@@ -513,28 +588,38 @@ void ordenar_usuarios_selecao_natural() {
     inicio = clock();
     int num_particoes = selecao_natural_usuarios(arq);
     fim = clock();
-    
-    // >>>>> CORREÇÃO CRÍTICA AQUI <<<<<
-    // Fecha o arquivo original APÓS a leitura ter sido concluída.
-    // Isso o "libera" para que possa ser removido e substituído mais tarde.
     fclose(arq);
 
     tempo_decorrido = ((double)(fim - inicio)) / CLOCKS_PER_SEC;
 
-    if (num_particoes == -1) return; // Se houve erro na criação das partições
+    if (num_particoes == -1) return;
 
-    // Imprime e registra o log da ETAPA 1
+    // --- Imprime e registra o log da ETAPA 1 ---
     printf("\n*****************************************\n");
     printf("Selecao Natural - TUsuario:\n");
     printf("Numero de particoes criadas: %d\n", num_particoes);
     printf("Tempo de execucao: %.2f segundos\n", tempo_decorrido);
     printf("*****************************************\n");
+    
+    // Prepara a mensagem de log
     sprintf(log_msg, "Selecao Natural - TUsuario: Particoes criadas: %d. Tempo: %.4f s.", num_particoes, tempo_decorrido);
-    registra_log(log_msg);
+    
+    // ===== INÍCIO: Bloco de código para registrar em log_classificacao.log =====
+    { // Usamos chaves para limitar o escopo das variáveis de log
+        FILE* log_file = fopen("log_selecao.log", "a");
+        if (log_file != NULL) {
+            time_t agora = time(NULL);
+            char* data_formatada = ctime(&agora);
+            data_formatada[strcspn(data_formatada, "\n")] = 0; // Remove a quebra de linha
+            fprintf(log_file, "[%s] %s\n", data_formatada, log_msg);
+            fclose(log_file);
+        }
+    }
+    // ===== FIM: Bloco de código do log =====
+
 
     if (num_particoes <= 1) {
         printf("\nArquivo de usuarios ja ordenado ou vazio.\n");
-        // Se há 1 partição, a função de intercalação já a renomeou para usuarios.dat
         return;
     }
 
@@ -546,14 +631,28 @@ void ordenar_usuarios_selecao_natural() {
     fim = clock();
     tempo_decorrido = ((double)(fim - inicio)) / CLOCKS_PER_SEC;
 
-    // Imprime e registra o log da ETAPA 2
+    // --- Imprime e registra o log da ETAPA 2 ---
     printf("\n*****************************************\n");
     printf("Intercalacao Otima - TUsuario:\n");
     printf("Numero de comparacoes: %d\n", comparacoes);
     printf("Tempo de execucao: %.2f segundos\n", tempo_decorrido);
     printf("*****************************************\n");
+
+    // Prepara a mensagem de log
     sprintf(log_msg, "Intercalacao Otima - TUsuario: Comparacoes: %d. Tempo: %.4f s.", comparacoes, tempo_decorrido);
-    registra_log(log_msg);
+    
+    // ===== INÍCIO: Bloco de código para registrar em log_intercalacao.log =====
+    {
+        FILE* log_file = fopen("log_intercalacao.log", "a");
+        if (log_file != NULL) {
+            time_t agora = time(NULL);
+            char* data_formatada = ctime(&agora);
+            data_formatada[strcspn(data_formatada, "\n")] = 0;
+            fprintf(log_file, "[%s] %s\n", data_formatada, log_msg);
+            fclose(log_file);
+        }
+    }
+    // ===== FIM: Bloco de código do log =====
 
     printf("\nArquivo de usuarios ordenado com sucesso!\n");
 }
